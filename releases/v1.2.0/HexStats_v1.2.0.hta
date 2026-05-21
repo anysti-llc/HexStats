@@ -1,0 +1,411 @@
+<html>
+<head>
+<title>HexStats</title>
+<hta:application
+    id="oHTA"
+    border="none"
+    caption="no"
+    scroll="no"
+    showintaskbar="yes"
+    singleinstance="yes"
+    windowstate="normal"
+    applicationname="HexStats">
+
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<meta charset="UTF-8" />
+
+<script language="JavaScript">
+
+var wmi = null;
+
+function initWMI() {
+    try {
+        var locator = new ActiveXObject("WbemScripting.SWbemLocator");
+        wmi = locator.ConnectServer(".", "root\\cimv2");
+    } catch(e) {
+        wmi = GetObject("winmgmts:\\\\.\\root\\cimv2");
+    }
+}
+
+function round1(n) { return Math.round(n * 10) / 10; }
+
+function formatSpeed(bps) {
+    bps = parseInt(bps) || 0;
+    if (bps >= 1048576) return (bps / 1048576).toFixed(1) + " MB/s";
+    if (bps >= 1024)    return Math.round(bps / 1024) + " KB/s";
+    return bps + " B/s";
+}
+
+function setBar(id, pct) {
+    if (pct > 100) pct = 100;
+    if (pct < 0)   pct = 0;
+    var el = document.getElementById(id);
+    el.style.width = pct + "%";
+    el.style.backgroundColor =
+        pct >= 80 ? "#ff4466" :
+        pct >= 55 ? "#da5bff" : "#FF69B4";
+}
+
+function setText(id, val) {
+    document.getElementById(id).innerText = val;
+}
+
+function updateStats() {
+    if (!wmi) return;
+    var results, items, obj;
+
+    // ── CPU ──────────────────────────────────────────────────────────────────
+    results = wmi.ExecQuery(
+        "SELECT PercentProcessorTime FROM Win32_PerfFormattedData_PerfOS_Processor WHERE Name='_Total'");
+    items = new Enumerator(results);
+    for (; !items.atEnd(); items.moveNext()) {
+        obj = items.item();
+        var cpuPct = parseInt(obj.PercentProcessorTime) || 0;
+        setText("cpu_val", cpuPct + "%");
+        setBar("cpu_bar", cpuPct);
+    }
+    items = null; results = null;
+
+    // ── RAM + Uptime ─────────────────────────────────────────────────────────
+    results = wmi.ExecQuery(
+        "SELECT TotalVisibleMemorySize,FreePhysicalMemory,LastBootUpTime FROM Win32_OperatingSystem");
+    items = new Enumerator(results);
+    for (; !items.atEnd(); items.moveNext()) {
+        obj = items.item();
+        var totGB  = round1(obj.TotalVisibleMemorySize / 1048576);
+        var freeGB = round1(obj.FreePhysicalMemory     / 1048576);
+        var usedGB = round1(totGB - freeGB);
+        var ramPct = Math.round((usedGB / totGB) * 100);
+        setText("ram_val", usedGB + " / " + totGB + " GB  " + ramPct + "%");
+        setBar("ram_bar", ramPct);
+
+        var bt   = obj.LastBootUpTime;
+        var boot = new Date(
+            parseInt(bt.substr(0,4)),
+            parseInt(bt.substr(4,2)) - 1,
+            parseInt(bt.substr(6,2)),
+            parseInt(bt.substr(8,2)),
+            parseInt(bt.substr(10,2)),
+            parseInt(bt.substr(12,2))
+        );
+        var sec  = Math.floor((new Date() - boot) / 1000);
+        var days = Math.floor(sec / 86400);
+        var hrs  = Math.floor((sec % 86400) / 3600);
+        var mins = Math.floor((sec % 3600)  / 60);
+        setText("uptime_val", days + "d " + hrs + "h " + mins + "m");
+    }
+    items = null; results = null;
+
+    // ── Disk C: ──────────────────────────────────────────────────────────────
+    results = wmi.ExecQuery(
+        "SELECT Size,FreeSpace FROM Win32_LogicalDisk WHERE DeviceID='C:'");
+    items = new Enumerator(results);
+    for (; !items.atEnd(); items.moveNext()) {
+        obj = items.item();
+        var dTot  = round1(obj.Size      / 1073741824);
+        var dFree = round1(obj.FreeSpace / 1073741824);
+        var dUsed = round1(dTot - dFree);
+        var dPct  = Math.round((dUsed / dTot) * 100);
+        setText("disk_val", dUsed + " / " + dTot + " GB  " + dPct + "%");
+        setBar("disk_bar", dPct);
+    }
+    items = null; results = null;
+
+    // ── Network ──────────────────────────────────────────────────────────────
+    var totalDown = 0, totalUp = 0;
+    results = wmi.ExecQuery(
+        "SELECT BytesReceivedPerSec,BytesSentPerSec,Name FROM Win32_PerfFormattedData_Tcpip_NetworkInterface");
+    items = new Enumerator(results);
+    for (; !items.atEnd(); items.moveNext()) {
+        obj = items.item();
+        var name = (obj.Name || "").toLowerCase();
+        if (name.indexOf("loopback") === -1 &&
+            name.indexOf("isatap")   === -1 &&
+            name.indexOf("teredo")   === -1) {
+            totalDown += parseInt(obj.BytesReceivedPerSec) || 0;
+            totalUp   += parseInt(obj.BytesSentPerSec)     || 0;
+        }
+    }
+    setText("net_down", formatSpeed(totalDown));
+    setText("net_up",   formatSpeed(totalUp));
+    items = null; results = null;
+
+    if (typeof CollectGarbage === "function") { CollectGarbage(); }
+}
+
+window.onload = function() {
+    window.resizeTo(248, 258);
+    window.moveTo(screen.width - 268, 40);
+    initWMI();
+    updateStats();
+    setInterval("updateStats()", 2000);
+};
+
+</script>
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+
+body {
+    background: #0c0810;
+    color: #ddc8f0;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    border: 1px solid #2e1a44;
+    -ms-user-select: none;
+}
+
+/* ── Main content area ── */
+.content {
+    flex: 1;
+    padding: 12px 14px 8px;
+    overflow: hidden;
+}
+
+/* ── Header ── */
+.header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #2a1840;
+}
+.svg-icon {
+    fill: none;
+    stroke: #FF69B4;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    display: inline-block;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+.header-title {
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: #FF69B4;
+    text-transform: uppercase;
+}
+.header-dot {
+    margin-left: auto;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #FF69B4;
+    box-shadow: 0 0 6px #FF69B4;
+    animation: pulse 2s infinite;
+}
+
+/* ── Stat rows ── */
+.stat { margin-bottom: 9px; }
+.stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    gap: 7px;
+}
+.stat-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #8a6fa8;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.stat-val {
+    color: #e8d0ff;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.bar-track {
+    background: #1a0f28;
+    border-radius: 10px;
+    height: 5px;
+    width: 100%;
+    overflow: hidden;
+    border: 1px solid #2e1a44;
+}
+.bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 10px;
+    background: #FF69B4;
+}
+
+/* ── Divider ── */
+.divider { border: none; border-top: 1px solid #1e1030; margin: 10px 0 8px; }
+
+/* ── Info rows (uptime + net) ── */
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+}
+.info-row:last-child { margin-bottom: 0; }
+.info-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #8a6fa8;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+.info-val { color: #FF69B4; font-size: 10px; font-weight: bold; letter-spacing: 0.5px; }
+
+.net-vals { display: flex; gap: 10px; }
+.net-item { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: bold; }
+.net-arrow.down { color: #7dd3b0; font-size: 9px; }
+.net-arrow.up   { color: #f09fca; font-size: 9px; }
+#net_down { color: #7dd3b0; }
+#net_up   { color: #f09fca; }
+
+/* ── Footer ── */
+.footer {
+    background: #000000;
+    height: 26px;
+    padding: 0 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #1a0f28;
+    flex-shrink: 0;
+}
+.footer-copy {
+    color: #4a3560;
+    font-size: 9px;
+    letter-spacing: 0.5px;
+}
+.footer-ver {
+    color: #FF69B4;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+/* ── Pulse ── */
+@keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}
+</style>
+
+</head>
+<body>
+
+<div class="content">
+
+    <!-- Header -->
+    <div class="header">
+        <!-- Hex logo -->
+        <svg class="svg-icon" width="16" height="16" viewBox="0 0 24 24">
+            <path d="M12 2l9 4.9v10.2L12 22l-9-4.9V6.9z"/>
+        </svg>
+        <span class="header-title">HexStats</span>
+        <div class="header-dot"></div>
+    </div>
+
+    <!-- CPU -->
+    <div class="stat">
+        <div class="stat-header">
+            <span class="stat-label">
+                <!-- CPU chip icon -->
+                <svg class="svg-icon" width="12" height="12" viewBox="0 0 24 24">
+                    <rect x="7" y="7" width="10" height="10" rx="1"/>
+                    <path d="M9 7V4M12 7V4M15 7V4M9 20v-3M12 20v-3M15 20v-3M7 9H4M7 12H4M7 15H4M20 9h-3M20 12h-3M20 15h-3"/>
+                </svg>
+                CPU
+            </span>
+            <span class="stat-val" id="cpu_val">&#8212;</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="cpu_bar"></div></div>
+    </div>
+
+    <!-- RAM -->
+    <div class="stat">
+        <div class="stat-header">
+            <span class="stat-label">
+                <!-- RAM stick icon -->
+                <svg class="svg-icon" width="12" height="12" viewBox="0 0 24 24">
+                    <rect x="2" y="8" width="20" height="8" rx="1"/>
+                    <path d="M6 8V6M9 8V6M12 8V6M15 8V6M18 8V6M6 16v2M9 16v2M12 16v2M15 16v2M18 16v2"/>
+                </svg>
+                RAM
+            </span>
+            <span class="stat-val" id="ram_val">&#8212;</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="ram_bar"></div></div>
+    </div>
+
+    <!-- Disk C: -->
+    <div class="stat">
+        <div class="stat-header">
+            <span class="stat-label">
+                <!-- Hard drive icon -->
+                <svg class="svg-icon" width="12" height="12" viewBox="0 0 24 24">
+                    <ellipse cx="12" cy="12" rx="10" ry="6"/>
+                    <path d="M2 12v4c0 3.31 4.48 6 10 6s10-2.69 10-6v-4"/>
+                    <circle cx="16" cy="12" r="1" fill="#FF69B4" stroke="none"/>
+                </svg>
+                DISK C:
+            </span>
+            <span class="stat-val" id="disk_val">&#8212;</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" id="disk_bar"></div></div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Uptime -->
+    <div class="info-row">
+        <span class="info-label">
+            <svg class="svg-icon" width="12" height="12" viewBox="0 0 24 24" style="stroke:#8a6fa8;">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6v6l4 2"/>
+            </svg>
+            UPTIME
+        </span>
+        <span class="info-val" id="uptime_val">&#8212;</span>
+    </div>
+
+    <!-- Network -->
+    <div class="info-row">
+        <span class="info-label">
+            <svg class="svg-icon" width="12" height="12" viewBox="0 0 24 24" style="stroke:#8a6fa8;">
+                <path d="M5 12h14M15 7l5 5-5 5"/>
+            </svg>
+            NET
+        </span>
+        <div class="net-vals">
+            <span class="net-item">
+                <span class="net-arrow down">&#9660;</span>
+                <span id="net_down">&#8212;</span>
+            </span>
+            <span class="net-item">
+                <span class="net-arrow up">&#9650;</span>
+                <span id="net_up">&#8212;</span>
+            </span>
+        </div>
+    </div>
+
+</div><!-- /content -->
+
+<!-- Footer -->
+<div class="footer">
+    <span class="footer-copy">&#169; 2026 Anysti LLC</span>
+    <span class="footer-ver">v1.2.0</span>
+</div>
+
+</body>
+</html>
