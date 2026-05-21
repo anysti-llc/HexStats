@@ -145,11 +145,11 @@ window.resizeTo(248, 258);
 
 See [CHANGELOG.md](./CHANGELOG.md) for the full version history.
 
-| Version | Highlights |
-|---|---|
-| v1.2.0 | SVG icons, footer, spacing fixes, v1.0.0 bug fixes |
-| v1.0.0 | Disk C:, Uptime, Network speed, memory leak fix, pure JS rewrite |
-| v0.1.0 | Initial release — CPU & RAM tracking |
+| Version | Highlights | Status |
+|---|---|---|
+| v1.2.0 | SVG icons, footer, spacing fixes, bug fixes | 🔜 Upcoming |
+| v1.0.0 | Disk C:, Uptime, Network speed, memory leak fix, pure JS rewrite | 📅 Dropping Next Week |
+| v0.1.0 | Initial release — CPU & RAM tracking | ✅ Available Now |
 
 ---
 
