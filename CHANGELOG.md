@@ -9,7 +9,7 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ---
 
-## [v1.2.0] — 2026-06-03 *(Planned)*
+## [v1.2.0] — Upcoming
 > *"The court gets its crests."*
 
 ### Added
@@ -24,7 +24,7 @@ This project follows [Semantic Versioning](https://semver.org/):
 
 ---
 
-## [v1.0.0] — 2026-05-27 *(Planned)*
+## [v1.0.0] — Dropping Next Week
 > *"The grimoire grows."*
 
 ### Added
