@@ -1,0 +1,65 @@
+<html>
+<head>
+<title>HexStats</title>
+<hta:application
+    id="oHTA"
+    border="thin"
+    scroll="no"
+    caption="yes"
+    showintaskbar="yes"
+    singleinstance="yes"
+    width="220"
+    height="120">
+
+<script language="VBScript">
+    Sub Window_OnLoad
+        window.resizeTo 220, 140
+        UpdateStats
+    End Sub
+
+    Sub UpdateStats
+        On Error Resume Next
+        Set objWMIService = GetObject("winmgmts:\\.\root\cimv2")
+
+        'Get CPU
+        Set colItems = objWMIService.ExecQuery("Select * from Win32_PerfFormattedData_PerfOS_Processor Where Name='_Total'")
+        For Each objItem in colItems
+            document.getElementById("cpu").innerText = objItem.PercentProcessorTime & "%"
+        Next
+
+        'Get RAM
+        Set colOS = objWMIService.ExecQuery("Select * from Win32_OperatingSystem")
+        For Each objOS in colOS
+            Total = Round(objOS.TotalVisibleMemorySize / 1048576, 1)
+            Free  = Round(objOS.FreePhysicalMemory / 1048576, 1)
+            Used  = Round(Total - Free, 1)
+            Pct   = Round((Used / Total) * 100, 0)
+            document.getElementById("ram").innerText = Used & " / " & Total & " GB (" & Pct & "%)"
+        Next
+    End Sub
+</script>
+
+<script language="JavaScript">
+    setInterval("UpdateStats()", 2000);
+</script>
+
+<style>
+    body {
+        background-color: #1e1e1e;
+        color: white;
+        font-family: 'Segoe UI', sans-serif;
+        font-size: 14px;
+        margin: 10px;
+    }
+    .stat {
+        font-weight: bold;
+        color: #FF69B4;
+    }
+</style>
+
+</head>
+<body>
+    <div>CPU: <span id="cpu" class="stat">Loading...</span></div>
+    <div style="margin-top: 8px;">RAM: <span id="ram" class="stat">Loading...</span></div>
+</body>
+</html>
